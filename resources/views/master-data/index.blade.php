@@ -1,19 +1,5 @@
-<x-app-layout title="Master Data CLL">
+<x-sidebar title="Master Data CLL">
     <style>
-        html,
-        body {
-            overflow: hidden !important;
-        }
-
-        main {
-            overflow: hidden;
-        }
-
-        .content {
-            max-height: calc(100dvh - 170px);
-            overflow: hidden;
-        }
-
         table {
             table-layout: fixed;
         }
@@ -44,7 +30,7 @@
         .model-filter-select {
             min-width: 220px;
             padding: .6rem .75rem;
-            border: 1px solid rgba(255, 255, 255, .28);
+            border: 1px solid var(--card-border);
             border-radius: 7px;
             background: #fff;
             color: #102a43;
@@ -192,4 +178,4 @@
             });
         });
     </script>
-</x-app-layout>
+</x-sidebar>
