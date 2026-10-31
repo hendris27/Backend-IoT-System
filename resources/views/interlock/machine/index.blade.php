@@ -1,89 +1,13 @@
-<x-app-layout title="Backend">
+<x-sidebar title="Machine">
     <style>
-        header {
-            display: flex;
-            align-items: center;
-            min-height: 6rem;
-            padding: 1.4rem 1rem 1rem;
-            margin-left: 235px;
-            text-align: left;
-            position: relative;
-            z-index: 1;
-            transition: margin-left .28s ease;
-        }
-
-        .sidebar-toggle {
-            position: absolute;
-            top: 1.25rem;
-            right: 1.25rem;
-            display: grid;
-            place-items: center;
-            width: 2.3rem;
-            height: 2.3rem;
-            color: #fff;
-            background: rgba(255, 255, 255, .14);
-            border: 1px solid rgba(255, 255, 255, .28);
-            border-radius: 7px;
-            cursor: pointer;
-            font-size: 1.2rem;
-            line-height: 1;
-            transition: left .28s ease, right .28s ease, background .2s ease, transform .2s ease;
-        }
-
-        .sidebar-toggle:hover {
-            background: rgba(255, 255, 255, .24);
-            transform: scale(1.04);
-        }
-
-        .sidebar-toggle:focus-visible {
-            outline: 3px solid rgba(255, 255, 255, .45);
-            outline-offset: 3px;
-        }
-
-        .brand {
-            display: inline-flex;
-            align-items: center;
-            gap: .7rem;
-            margin: 0;
-            font-size: 1.9rem;
-            font-weight: 700;
-            letter-spacing: 0;
-        }
-
-        main {
-            min-height: calc(100dvh - 7rem);
-            margin-left: 235px;
-            position: relative;
-            z-index: 1;
-            transition: margin-left .28s ease;
-        }
-
-        .page.sidebar-hidden .sidebar {
-            left: -235px;
-        }
-
-        .page.sidebar-hidden header,
-        .page.sidebar-hidden main {
-            margin-left: 0;
-        }
-
-        .page.sidebar-hidden .sidebar-toggle {
-            position: fixed;
-            z-index: 5;
-            top: 1.25rem;
-            right: auto;
-            left: 1rem;
-        }
-
         html,
         body {
             overflow-x: hidden;
-            overflow-y: auto;
         }
 
         form {
-            min-height: calc(100dvh - 7rem);
-            padding: 1.25rem 0 2rem;
+            min-height: 0;
+            padding: 0 0 .5rem;
         }
 
         .controls {
@@ -121,8 +45,8 @@
 
         .control:focus-within,
         .control:focus {
-            border-color: #fff;
-            outline: 3px solid rgba(255, 255, 255, .2);
+            border-color: var(--blue);
+            outline: 3px solid rgba(22, 119, 210, .14);
             outline-offset: 1px;
         }
 
@@ -469,7 +393,7 @@
         .scan-input:focus,
         .search:focus {
             border-color: var(--blue);
-            outline: 3px solid rgba(255, 255, 255, .24);
+            outline: 3px solid rgba(22, 119, 210, .14);
             outline-offset: 1px;
         }
 
@@ -614,10 +538,6 @@
             display: none;
         }
 
-        header {
-            display: none;
-        }
-
         main {
             min-height: 100dvh;
         }
@@ -625,50 +545,6 @@
         form {
             min-height: 100dvh;
             padding: 1rem 0 2rem;
-        }
-
-        .backend-header-card {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            margin: 0 auto 1.25rem;
-            padding: .95rem 1.2rem;
-            border: 1px solid rgba(255, 255, 255, .24);
-            border-radius: 8px;
-            background: rgba(4, 32, 63, .62);
-            box-shadow: 0 10px 28px rgba(3, 25, 56, .15);
-        }
-
-        .backend-header-card h1 {
-            margin: 0;
-            font-size: 1.25rem;
-        }
-
-        .backend-eyebrow {
-            display: block;
-            margin-bottom: .2rem;
-            color: #a9cee9;
-            font-size: .6rem;
-            font-weight: 700;
-            letter-spacing: .08em;
-        }
-
-        .page-clock {
-            display: grid;
-            gap: .15rem;
-            text-align: right;
-        }
-
-        .page-clock time {
-            font-size: 1.1rem;
-            font-variant-numeric: tabular-nums;
-            font-weight: 700;
-        }
-
-        .page-clock span {
-            color: #d4e7fa;
-            font-size: .65rem;
         }
 
         .controls {
@@ -876,142 +752,272 @@
             display: none;
         }
 
-        .page-clock {
-            min-width: 145px;
+        .content {
+            max-width: none;
+            margin: 0;
+            padding: 1rem 10px 1.25rem;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .5rem;
+            max-width: none;
+            margin: 0;
+        }
+
+        .controls .field-label {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .controls .control,
+        .controls .machine,
+        .scan-summary {
+            height: 26px;
+            min-height: 26px;
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            background: var(--surface);
+            color: var(--ink);
+            box-shadow: none;
+            font-size: .66rem;
+        }
+
+        .controls .field-group {
+            gap: 0;
+        }
+
+        .controls .line-search,
+        .controls .model-search-input {
+            height: 24px;
+            min-height: 24px;
+            padding: 0 .55rem;
+            background: transparent;
+            color: var(--ink);
+            text-align: left;
+            font-size: .68rem;
+        }
+
+        .controls .line-search::placeholder,
+        .controls .model-search-input::placeholder {
+            color: var(--muted);
+        }
+
+        .controls .line-select::after {
+            right: .6rem;
+            border-color: var(--blue);
+        }
+
+        .controls .model-picker,
+        .controls .model-input-wrap {
+            min-height: 24px;
+            height: 24px;
+        }
+
+        .controls .change-model {
+            height: 24px;
+            padding: 0 .5rem;
+            font-size: .62rem;
+        }
+
+        .controls .machine {
+            padding: 0 .45rem;
+            gap: .35rem;
+            font-size: .64rem;
+        }
+
+        .controls .machine strong {
+            min-width: 58px;
+            height: 20px;
+            padding: 0 .35rem;
+            border-radius: 0;
+            font-size: .64rem;
+            color: var(--blue-dark);
+            background: var(--blue-soft);
+            border-color: var(--card-border);
+        }
+
+        .controls .machine strong.locked {
+            color: #475569;
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+
+        .controls .machine strong:not(.locked) {
+            color: var(--green);
+            background: var(--green-soft);
+            border-color: #a8dfbf;
+        }
+
+        .scan-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .35rem;
+            padding: 0 .5rem;
+            font-weight: 700;
+        }
+
+        .controls .progress-summary {
+            margin: 0;
+            color: var(--ink);
+            font-size: .64rem;
+        }
+
+        .scan-area {
+            width: 100%;
+            margin: .6rem 0 0;
+        }
+
+        .scan-workspace {
+            display: grid;
+            grid-template-columns: minmax(0, .4fr) minmax(0, .6fr);
+            grid-template-rows: minmax(0, .53fr) minmax(0, .47fr);
+            align-items: stretch;
+            gap: .55rem;
+            height: calc(100dvh - 240px);
+            min-height: 360px;
+            margin: .6rem 0 0;
+            padding: 1.25rem;
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            background: var(--surface);
+        }
+
+        .scan-card,
+        .sparepart-list,
+        .interlock-panel {
+            min-width: 0;
+            height: 100%;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--ink);
+            box-shadow: 0 6px 18px rgba(16, 36, 61, .06);
+        }
+
+        .scan-card {
+            grid-column: 1;
+            grid-row: 1;
+            padding: .85rem;
+        }
+
+        .interlock-panel {
+            grid-column: 2;
+            grid-row: 1;
+            padding: .85rem;
+        }
+
+        .sparepart-list {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            overflow: auto;
+        }
+
+        .scan-card h2,
+        .sparepart-list h2,
+        .interlock-panel h2 {
+            color: var(--ink);
+        }
+
+        .scan-input {
+            box-shadow: none;
+        }
+
+        .sparepart-list h2 {
+            background: #f8fafc;
+        }
+
+        .sparepart-list table {
+            background: transparent;
+        }
+
+        .sparepart-list th,
+        .sparepart-list td {
+            border-color: #e2e8f0;
+            color: var(--ink);
+        }
+
+        .sparepart-list th {
+            background: #f8fafc;
+        }
+
+        .sparepart-list .empty-row {
+            color: var(--muted);
+        }
+
+        .interlock-state p {
+            color: #52657b;
         }
 
         @media (max-width: 700px) {
-            .page {
-                padding: 0 1rem 1.5rem;
+            .content {
+                padding: .9rem .85rem 1.25rem;
             }
 
-            .sidebar {
-                position: relative;
-                width: auto;
-                padding: 1rem;
-                background: rgba(2, 21, 48, .34);
-                border-right: 0;
-                border-bottom: 1px solid rgba(255, 255, 255, .14);
-                transition: margin-left .28s ease;
-            }
-
-            .sidebar-brand {
-                margin: 0 0 1rem;
-            }
-
-            .nav-label {
-                display: none;
-            }
-
-            .nav-list {
-                grid-template-columns: repeat(4, 1fr);
-                gap: .3rem;
-            }
-
-            .nav-link {
-                justify-content: center;
-                padding: .65rem .3rem;
-                font-size: .65rem;
-                text-align: center;
-            }
-
-            .nav-link::before {
-                display: none;
-            }
-
-            header {
-                margin-left: 0;
-                min-height: 5rem;
-                padding: 1.25rem .5rem 1rem;
-            }
-
-            .brand {
-                font-size: 1.55rem;
-            }
-
-            .page-clock {
-                top: .7rem;
-                right: .7rem;
-                min-width: 120px;
-                padding: .4rem .55rem;
-            }
-
-            .page-clock time {
-                font-size: .95rem;
-            }
-
-            .page-clock span {
-                font-size: .58rem;
-            }
-
-            .sidebar-toggle {
-                position: fixed;
-                z-index: 5;
-                top: 1rem;
-                left: 1rem;
-                right: auto;
-            }
-
-            .page.sidebar-hidden .sidebar {
-                left: 0;
-                margin-left: -100%;
-            }
-
-            main {
-                margin-left: 0;
+            form {
+                min-height: 0;
             }
 
             .controls {
-                grid-template-columns: 1fr;
-                gap: .8rem;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: .45rem;
             }
 
             .scan-area {
                 width: 100%;
-                margin-top: 1.2rem;
+                margin-top: .6rem;
             }
 
             .scan-workspace {
                 grid-template-columns: 1fr;
+                grid-template-rows: auto;
+                height: auto;
+                min-height: 0;
+                padding: .65rem;
             }
 
-            .backend-header-card {
-                padding: .8rem;
+            .scan-card,
+            .interlock-panel,
+            .sparepart-list {
+                grid-column: 1;
+                grid-row: auto;
+                min-height: 220px;
             }
 
-            .page-clock {
-                min-width: 0;
+            .sparepart-list {
+                min-height: 280px;
             }
 
             .machine {
                 width: 100%;
             }
         }
+
+        @media (max-width: 420px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+
+        }
     </style>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    </head>
-
-    <body>
-        <form id="scan" method="POST" action="{{ route('scan') }}">
+        <form id="scan">
             @csrf
-            <div class="backend-header-card">
-                <div>
-                    <span class="backend-eyebrow">CLL INTERLOCK SYSTEM</span>
-                    <h1>Backend</h1>
-                </div>
-                <div class="page-clock" aria-label="Jam saat ini">
-                    <time id="clock-time" datetime=""></time>
-                    <span id="clock-date"></span>
-                </div>
-            </div>
-
             <div class="controls">
                 <div class="field-group">
                     <label class="field-label" for="line">Line Produksi</label>
                     <div class="control line-select">
-                        <input class="line-search" id="line" name="line" type="search" value="{{ old('line') }}"
-                            list="line-options" placeholder="Cari line 1-30" aria-label="Cari dan pilih line"
-                            autocomplete="off">
+                        <input class="line-search" id="line" name="line" type="search"
+                            value="{{ old('line') }}" list="line-options" placeholder="Cari line 1-30"
+                            aria-label="Cari dan pilih line" autocomplete="off">
                         <datalist id="line-options">
                             @for ($lineNumber = 1; $lineNumber <= 30; $lineNumber++)
                                 <option value="Line {{ $lineNumber }}"></option>
@@ -1044,6 +1050,13 @@
                         <strong id="machine-status" class="locked">Locked</strong>
                     </div>
                 </div>
+                <div class="field-group">
+                    <span class="field-label">Progres Scan</span>
+                    <div class="scan-summary progress-summary" aria-live="polite">
+                        <span id="scan-progress-text">0/0 Spare Part OK</span>
+                        <strong id="scan-percentage">0%</strong>
+                    </div>
+                </div>
             </div>
 
             <div class="scan-area">
@@ -1054,17 +1067,35 @@
                     <div class="errors" role="alert">{{ $errors->first() }}</div>
                 @endif
 
-                <section class="scan-card" aria-labelledby="scan-heading">
-                    <h2 id="scan-heading">3. Scan Spare Part</h2>
-                    <div class="scan-input-row">
-                        <label hidden for="component_scan">Scan barcode spare part</label>
-                        <input class="scan-input" id="component_scan" name="component_scan" type="text"
-                            value="{{ old('component_scan') }}" placeholder="Scan barcode spare part..." autofocus>
-                        <button class="reset-scan" id="reset-scan" type="button">Reset</button>
-                    </div>
-                </section>
-
                 <div class="scan-workspace">
+                    <section class="scan-card" aria-labelledby="scan-heading">
+                        <h2 id="scan-heading">3. Scan Spare Part</h2>
+                        <div class="scan-input-row">
+                            <label hidden for="component_scan">Scan barcode spare part</label>
+                            <input class="scan-input" id="component_scan" name="component_scan" type="text"
+                                value="{{ old('component_scan') }}" placeholder="Scan barcode spare part..." autofocus>
+                            <button class="reset-scan" id="reset-scan" type="button">Reset</button>
+                        </div>
+                    </section>
+
+                    <section class="interlock-panel" aria-labelledby="interlock-heading">
+                        <h2 id="interlock-heading">Interlock Status (<span id="active-line-label">LINE -</span>)</h2>
+                        <div class="interlock-state" id="interlock-state">
+                            <span class="lock-icon" aria-hidden="true">&#128274;</span>
+                            <div>
+                                <strong id="interlock-status-detail">INTERLOCK</strong>
+                                <p id="interlock-message">Pilih line dan model untuk memulai scan.</p>
+                            </div>
+                        </div>
+                        <div class="progress-track" role="progressbar" aria-label="Progres scan" aria-valuemin="0"
+                            aria-valuemax="100" aria-valuenow="0">
+                            <span class="progress-fill" id="scan-progress-fill"></span>
+                        </div>
+                        <button class="release-interlock" id="release-interlock" type="button" disabled>
+                            Release Interlock
+                        </button>
+                    </section>
+
                     <section id="items-table-container" class="sparepart-list">
                         <h2 id="sparepart-heading">Daftar Spare Part</h2>
                         <table>
@@ -1078,32 +1109,11 @@
                             </thead>
                             <tbody id="items-tbody">
                                 <tr>
-                                    <td class="empty-row" colspan="4">Pilih model untuk melihat daftar sparepart.</td>
+                                    <td class="empty-row" colspan="4">Pilih model untuk melihat daftar sparepart.
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
-                    </section>
-
-                    <section class="interlock-panel" aria-labelledby="interlock-heading">
-                        <h2 id="interlock-heading">Interlock Status (<span id="active-line-label">LINE -</span>)</h2>
-                        <div class="interlock-state" id="interlock-state">
-                            <span class="lock-icon" aria-hidden="true">&#128274;</span>
-                            <div>
-                                <strong id="interlock-status-detail">INTERLOCK</strong>
-                                <p id="interlock-message">Pilih line dan model untuk memulai scan.</p>
-                            </div>
-                        </div>
-                        <div class="progress-summary">
-                            <span id="scan-progress-text">0/0 Spare Part OK</span>
-                            <strong id="scan-percentage">0%</strong>
-                        </div>
-                        <div class="progress-track" role="progressbar" aria-label="Progres scan"
-                            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                            <span class="progress-fill" id="scan-progress-fill"></span>
-                        </div>
-                        <button class="release-interlock" id="release-interlock" type="button" disabled>
-                            Release Interlock
-                        </button>
                     </section>
                 </div>
             </div>
@@ -1114,8 +1124,8 @@
                 <h2 id="change-model-title">Konfirmasi Change Model</h2>
                 <p>Masukkan PIN angka untuk mengganti model. Verifikasi PIN belum dikonfigurasi.</p>
                 <label class="field-label" for="change-model-pin">PIN</label>
-                <input id="change-model-pin" name="pin" type="password" inputmode="numeric"
-                    pattern="[0-9]*" maxlength="12" autocomplete="off" readonly aria-describedby="pin-feedback">
+                <input id="change-model-pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]*"
+                    maxlength="12" autocomplete="off" readonly aria-describedby="pin-feedback">
                 <div class="pin-keypad" aria-label="Keypad PIN">
                     <button type="button" data-pin-key="1">1</button>
                     <button type="button" data-pin-key="2">2</button>
@@ -1139,28 +1149,6 @@
         </dialog>
 
         <script>
-            const clockTime = document.getElementById('clock-time');
-            const clockDate = document.getElementById('clock-date');
-
-            function updateClock() {
-                const now = new Date();
-                clockTime.dateTime = now.toISOString();
-                clockTime.textContent = new Intl.DateTimeFormat('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                }).format(now);
-                clockDate.textContent = new Intl.DateTimeFormat('id-ID', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                }).format(now);
-            }
-
-            updateClock();
-            setInterval(updateClock, 1000);
-
             // Handle model search and display items
             const modelInput = document.getElementById('model_name');
             const changeModelButton = document.getElementById('change-model');
@@ -1217,41 +1205,42 @@
                 console.log('STATUS MACHINE:', statusText);
 
                 fetch('/interlock/machine-status', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector(
-                            'meta[name="csrf-token"]'
-                        ).content
-                    },
-                    body: JSON.stringify({
-                        status: statusText
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector(
+                                'meta[name="csrf-token"]'
+                            ).content
+                        },
+                        body: JSON.stringify({
+                            status: statusText,
+                            line: lineInput.value.trim()
+                        })
                     })
-                })
-                .then(response => {
-                    console.log('HTTP STATUS:', response.status);
+                    .then(response => {
+                        console.log('HTTP STATUS:', response.status);
 
-                    return response.text().then(text => {
-                        console.log('RAW RESPONSE:', text);
+                        return response.text().then(text => {
+                            console.log('RAW RESPONSE:', text);
 
-                        if (!response.ok) {
-                            throw new Error(`HTTP Error ${response.status}: ${text}`);
-                        }
+                            if (!response.ok) {
+                                throw new Error(`HTTP Error ${response.status}: ${text}`);
+                            }
 
-                        try {
-                            return JSON.parse(text);
-                        } catch (error) {
-                            throw new Error('Response Laravel bukan JSON: ' + text);
-                        }
+                            try {
+                                return JSON.parse(text);
+                            } catch (error) {
+                                throw new Error('Response Laravel bukan JSON: ' + text);
+                            }
+                        });
+                    })
+                    .then(data => {
+                        console.log('LARAVEL RESPONSE:', data);
+                    })
+                    .catch(error => {
+                        console.error('GAGAL KIRIM STATUS:', error);
                     });
-                })
-                .then(data => {
-                    console.log('LARAVEL RESPONSE:', data);
-                })
-                .catch(error => {
-                    console.error('GAGAL KIRIM STATUS:', error);
-                });
             }
 
             updateMachineStatus('Locked');
@@ -1435,14 +1424,16 @@
                 }
 
                 fetch(changeModelVerifyUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    },
-                    body: JSON.stringify({ pin: changeModelPinInput.value })
-                })
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        },
+                        body: JSON.stringify({
+                            pin: changeModelPinInput.value
+                        })
+                    })
                     .then(async response => {
                         const result = await response.json();
                         if (!response.ok) {
@@ -1600,6 +1591,5 @@
                 releaseButton.disabled = true;
                 releaseButton.textContent = 'Interlock Released';
             });
-
         </script>
-</x-app-layout>
+</x-sidebar>
