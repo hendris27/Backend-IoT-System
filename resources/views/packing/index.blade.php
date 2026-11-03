@@ -773,7 +773,6 @@
 
                 boxTotal.textContent = rows.length;
                 boxCurrent.textContent = Math.min(Number(boxCurrent.textContent), rows.length);
-                addBoxButton.disabled = rows.length >= maxBoxes;
             }
 
             updateBoxRows();
