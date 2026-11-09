@@ -51,6 +51,14 @@
                             </li>
                         </ul>
                     </li>
+                    <li>
+                        <a class="nav-link {{ request()->routeIs('employees.*') ? 'active' : '' }}"
+                            aria-current="{{ request()->routeIs('employees.*') ? 'page' : 'false' }}"
+                            href="{{ route('employees.index') }}">
+                            <span class="status-dot"></span>
+                            All User
+                        </a>
+                    </li>
                     @php($isPackingActive = request()->routeIs('packing.*'))
                     <li class="nav-group {{ $isPackingActive ? 'is-open' : '' }}">
                         <button type="button" class="interlock-menu-card {{ $isPackingActive ? 'active' : '' }}"
@@ -121,6 +129,7 @@
         const contentMain = document.querySelector('main');
         const profileButton = document.getElementById('profile-trigger');
         const profileDropdown = document.getElementById('profile-dropdown');
+        const profileLogoutForm = document.querySelector('.profile-logout-form');
         document.querySelectorAll('.nav-group').forEach(navGroup => {
             const navToggle = navGroup.querySelector('.interlock-menu-card');
 
@@ -171,6 +180,36 @@
             });
         }
 
+        if (profileLogoutForm) {
+            profileLogoutForm.addEventListener('submit', async event => {
+                event.preventDefault();
+
+                if (typeof Swal === 'undefined') {
+                    if (window.confirm('Apakah Anda yakin ingin keluar dari akun ini?')) {
+                        profileLogoutForm.submit();
+                    }
+                    return;
+                }
+
+                const result = await Swal.fire({
+                    icon: 'question',
+                    title: 'Konfirmasi keluar',
+                    text: 'Apakah Anda yakin ingin keluar dari akun ini?',
+                    showCancelButton: true,
+                    confirmButtonColor: '#1677d2',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: 'Ya, keluar',
+                    cancelButtonText: 'Batal',
+                    focusCancel: true,
+                    reverseButtons: true,
+                });
+
+                if (result.isConfirmed) {
+                    profileLogoutForm.submit();
+                }
+            });
+        }
+
         if (contentMain && appPage && sidebarButton) {
             contentMain.addEventListener('click', () => {
                 if (window.matchMedia('(max-width: 700px)').matches &&
@@ -187,7 +226,13 @@
                 title: 'Berhasil!',
                 text: '{{ session('success') }}',
                 confirmButtonColor: '#1677d2',
-                confirmButtonText: 'OK'
+                @if (session('packing_success_auto_close'))
+                    timer: 1800,
+                    timerProgressBar: true,
+                    showConfirmButton: false,
+                @else
+                    confirmButtonText: 'OK',
+                @endif
             });
         @endif
 

@@ -64,6 +64,20 @@ return [
             ]) : [],
         ],
 
+        'external' => [
+            'driver' => 'mysql',
+            'host' => env('EXT_DB_HOST'),
+            'port' => env('EXT_DB_PORT'),
+            'database' => env('EXT_DB_DATABASE'),
+            'username' => env('EXT_DB_USERNAME'),
+            'password' => env('EXT_DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+            'engine' => null,
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

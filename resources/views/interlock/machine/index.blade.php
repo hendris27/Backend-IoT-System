@@ -5,7 +5,7 @@
             overflow-x: hidden;
         }
 
-        form {
+        #scan {
             min-height: 0;
             padding: 0 0 .5rem;
         }
@@ -542,7 +542,7 @@
             min-height: 100dvh;
         }
 
-        form {
+        #scan {
             min-height: 100dvh;
             padding: 1rem 0 2rem;
         }
@@ -963,7 +963,7 @@
                 padding: .9rem .85rem 1.25rem;
             }
 
-            form {
+            #scan {
                 min-height: 0;
             }
 

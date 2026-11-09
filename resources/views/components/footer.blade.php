@@ -1,3 +1,3 @@
 <footer class="app-footer">
-    &copy; {{ date('Y') }} Backend IoT System. All Rights Reserved.
+    &copy; {{ date('Y') }} SIIX - Backend. All Rights Reserved.
 </footer>
