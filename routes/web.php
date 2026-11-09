@@ -1,7 +1,11 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\PackingHistoryController;
+use App\Http\Controllers\PackingLocationController;
 use App\Http\Controllers\PackingProcessController;
 use App\Models\MachineStatus;
 use App\Models\MasterData;
@@ -11,6 +15,18 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
 
+Route::middleware('guest')->group(function (): void {
+    Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
+    Route::post('/login', [AuthenticatedSessionController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('login.store');
+});
+
+Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
+    ->middleware('auth')
+    ->name('logout');
+
+Route::middleware('auth')->group(function (): void {
 Route::get('/', function () {
     return to_route('machine');
 })->name('home');
@@ -56,8 +72,12 @@ Route::post('/change-model/verify-pin', function (Request $request) {
 })->middleware('throttle:5,1')->name('change-model.verify-pin');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::get('/employees', [EmployeeController::class, 'index'])->name('employees.index');
 Route::prefix('packing')->name('packing.')->group(function () {
     Route::get('/', [PackingProcessController::class, 'dashboard'])->name('index');
+    Route::post('/locations', [PackingLocationController::class, 'store'])->name('locations.store');
+    Route::delete('/locations/{location}', [PackingLocationController::class, 'destroy'])->name('locations.destroy');
+    Route::post('/locations/{location}/activate', [PackingLocationController::class, 'activate'])->name('locations.activate');
     Route::post('/processes', [PackingProcessController::class, 'storeFromDashboard'])->name('processes.store');
     Route::get('/processes/scan-in', [PackingProcessController::class, 'scanForIn'])->name('processes.scan-in');
     Route::get('/processes/scan', [PackingProcessController::class, 'scanForOut'])->name('processes.scan');
@@ -66,7 +86,11 @@ Route::prefix('packing')->name('packing.')->group(function () {
         ->name('processes.update');
     Route::post('/processes/{packingProcess}/out', [PackingProcessController::class, 'markOut'])
         ->name('processes.out');
-    Route::view('/history', 'packing.history')->name('history');
+    Route::get('/history/export', [PackingHistoryController::class, 'export'])->name('history.export');
+    Route::get('/history', [PackingHistoryController::class, 'index'])->name('history');
+    Route::get('/history/users/{user}', [PackingHistoryController::class, 'show'])
+        ->whereNumber('user')
+        ->name('history.users.show');
     Route::view('/report', 'packing.report')->name('report');
 });
 
@@ -125,4 +149,5 @@ Route::post('/interlock/machine-status', function (Request $request) {
         'nodered_status' => $response->status(),
         'nodered_body' => $response->body(),
     ], $response->successful() ? 200 : 502);
+});
 });

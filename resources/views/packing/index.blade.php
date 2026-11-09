@@ -3,6 +3,8 @@
 <x-sidebar title="Packing Dashboard">
     <div class="packing-dashboard" data-packing-dashboard aria-busy="false"
         data-location="{{ $selectedLocation }}" data-active-box-numbers='@json($activeBoxNumbers->all())'
+        data-search-no-results="{{ $searchNotFound ? 'true' : 'false' }}"
+        data-location-settings-error="{{ session('location_settings_error') }}"
         data-reopen-in="{{ $errors->any() && ! $errors->has('packing_process') ? 'true' : 'false' }}"
         data-reopen-edit-process-id="{{ old('edit_process_id') }}"
         data-old-edit-model="{{ old('model') }}" data-old-edit-no-hu="{{ old('no_hu') }}"
@@ -74,6 +76,7 @@
             <aside class="packing-location-panel">
                 <form class="packing-search" method="GET" action="{{ route('packing.index') }}">
                     <input type="hidden" name="location" value="{{ $selectedLocation }}">
+                    <input type="hidden" name="search_submitted" value="1">
                     <input id="packing-search" type="search" name="search" value="{{ $search }}"
                         placeholder="Search..." autocomplete="off">
                     <button type="submit" aria-label="Cari">
@@ -82,11 +85,15 @@
                             <path d="m13.2 13.2 4 4" />
                         </svg>
                     </button>
+                    <button class="packing-search-settings-button" type="button" data-open-location-settings
+                        aria-label="Pengaturan lokasi" title="Pengaturan lokasi">
+                        <span aria-hidden="true">&#x2699;&#xfe0e;</span>
+                    </button>
                 </form>
 
                 <nav class="packing-location-list" aria-label="Pilih lokasi" data-packing-async-navigation>
                     @foreach ($locations as $location)
-                        <a class="packing-location-button {{ $selectedLocation === $location ? 'is-selected' : '' }}"
+                        <a class="packing-location-button {{ $selectedLocation === $location ? 'is-selected' : '' }} {{ in_array($location, $matchingLocations, true) ? 'is-search-match' : '' }}"
                             href="{{ route('packing.index', array_filter(['location' => $location, 'search' => $search])) }}"
                             @if ($selectedLocation === $location) aria-current="true" @endif>
                             {{ $location }}
@@ -150,7 +157,13 @@
                             @empty
                                 <tr>
                                     <td class="packing-empty-state" colspan="6">
-                                        Belum ada packing aktif di {{ $selectedLocation }}.
+                                        <div class="packing-empty-content">
+                                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                <path d="m3 7 9-4 9 4-9 4-9-4Z"></path>
+                                                <path d="M3 7v10l9 4 9-4V7M12 11v10"></path>
+                                            </svg>
+                                            <span>Data belum tersedia</span>
+                                        </div>
                                     </td>
                                 </tr>
                             @endforelse
@@ -168,10 +181,8 @@
         <section class="packing-history-panel" aria-labelledby="packing-history-title">
             <div class="packing-history-heading">
                 <div>
-                    <p class="packing-eyebrow">Aktivitas lokasi {{ $selectedLocation }}</p>
-                    <h2 id="packing-history-title">History Process</h2>
+                    <h2 id="packing-history-title">History Process {{ $selectedLocation }}</h2>
                 </div>
-                <span class="packing-history-count">{{ $historyProcesses->total() }} record</span>
             </div>
             <div class="packing-table-wrap">
                 <table class="packing-table packing-history-table">
@@ -183,8 +194,9 @@
                             <th scope="col">No HU</th>
                             <th scope="col">QTY</th>
                             <th scope="col">Time IN</th>
+                            <th scope="col">PIC IN</th>
                             <th scope="col">Time OUT</th>
-                            <th scope="col">Remarks PIC</th>
+                            <th scope="col">PIC OUT</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -195,14 +207,21 @@
                                 <td>{{ $process->model }}</td>
                                 <td>{{ $process->no_hu ?: '—' }}</td>
                                 <td>{{ $process->qty }}</td>
-                                <td>{{ $process->time_in?->format('d M Y, H:i') ?: '—' }}</td>
-                                <td>{{ $process->time_out?->format('d M Y, H:i') ?: '—' }}</td>
-                                <td>{{ $process->remarks ?: '—' }}</td>
+                                <td>{{ $process->time_in?->copy()->timezone('Asia/Bangkok')->format('d M Y, H:i') ?: '—' }}</td>
+                                <td>{{ $process->inUser?->name ?: ($process->remarks ?: '—') }}</td>
+                                <td>{{ $process->time_out?->copy()->timezone('Asia/Bangkok')->format('d M Y, H:i') ?: '—' }}</td>
+                                <td>{{ $process->outUser?->name ?: '—' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td class="packing-empty-state" colspan="8">
-                                    Belum ada history process di {{ $selectedLocation }}.
+                                <td class="packing-empty-state" colspan="9">
+                                        <div class="packing-empty-content">
+                                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                <circle cx="12" cy="12" r="8.5"></circle>
+                                                <path d="M12 7v5l3.2 2"></path>
+                                            </svg>
+                                            <span>Belum ada histori untuk akun ini</span>
+                                        </div>
                                 </td>
                             </tr>
                         @endforelse
@@ -261,10 +280,6 @@
                         Customer
                         <input name="customer" type="text" maxlength="100" value="{{ old('customer') }}" required
                             data-in-customer>
-                    </label>
-                    <label>
-                        Remarks PIC
-                        <textarea name="remarks" rows="1" maxlength="5000">{{ old('remarks') }}</textarea>
                     </label>
                 </div>
 
@@ -456,11 +471,85 @@
                 </div>
             </form>
         </dialog>
+
+        <dialog class="packing-modal packing-location-settings-modal" data-location-settings-modal
+            aria-labelledby="packing-location-settings-title">
+            <div class="packing-modal-form">
+                <div class="packing-modal-heading">
+                    <div>
+                        <p class="packing-eyebrow">Packing</p>
+                        <h2 id="packing-location-settings-title">Pengaturan lokasi WP</h2>
+                    </div>
+                    <button class="packing-modal-close" type="button" data-close-modal aria-label="Tutup">×</button>
+                </div>
+
+                <p class="packing-location-settings-help">
+                    Tambah lokasi dengan nomor berikutnya. Lokasi yang masih memiliki packing aktif tidak dapat dihapus.
+                    Riwayat tetap tersimpan saat lokasi dinonaktifkan.
+                </p>
+
+                <div class="packing-location-settings-section-heading">
+                    <h3>Lokasi aktif</h3>
+                    <span>{{ $locations->count() }} lokasi</span>
+                </div>
+                <div class="packing-location-settings-list" aria-label="Lokasi aktif">
+                    @foreach ($locations as $location)
+                        @php($activeProcessCount = $activeLocationCounts->get($location, 0))
+                        <div class="packing-location-settings-row">
+                            <div class="packing-location-settings-info">
+                                <strong class="packing-location-settings-name">{{ $location }}</strong>
+                                <small class="{{ $activeProcessCount > 0 ? 'has-active-processes' : '' }}">
+                                    {{ $activeProcessCount > 0 ? $activeProcessCount.' packing aktif' : 'Tidak ada packing aktif' }}
+                                </small>
+                            </div>
+                            <form method="POST" action="{{ route('packing.locations.destroy', ['location' => $location]) }}"
+                                data-remove-location-form data-location-name="{{ $location }}">
+                                @csrf
+                                @method('DELETE')
+                                <input type="hidden" name="selected_location" value="{{ $selectedLocation }}">
+                                <button class="packing-location-remove-button" type="submit"
+                                    @disabled($activeProcessCount > 0 || $locations->count() <= 1)
+                                    @if ($activeProcessCount > 0) title="Selesaikan packing aktif sebelum menghapus lokasi" @elseif ($locations->count() <= 1) title="Minimal satu lokasi harus tetap aktif" @endif>
+                                    Hapus
+                                </button>
+                            </form>
+                        </div>
+                    @endforeach
+                </div>
+
+                <form method="POST" action="{{ route('packing.locations.store') }}" class="packing-location-add-form">
+                    @csrf
+                    <button class="packing-location-add-button" type="submit">
+                        <span aria-hidden="true">+</span>
+                        Tambah {{ $nextLocationName }}
+                    </button>
+                </form>
+
+                @if ($inactiveLocations->isNotEmpty())
+                    <section class="packing-location-inactive-section" aria-labelledby="packing-inactive-locations-title">
+                        <h3 id="packing-inactive-locations-title">Lokasi nonaktif</h3>
+                        <p>Aktifkan kembali lokasi untuk melihat riwayatnya dan menggunakannya lagi.</p>
+                        <div class="packing-location-settings-list">
+                            @foreach ($inactiveLocations as $location)
+                                <div class="packing-location-settings-row">
+                                    <strong>{{ $location }}</strong>
+                                    <form method="POST" action="{{ route('packing.locations.activate', ['location' => $location]) }}">
+                                        @csrf
+                                        <button class="packing-location-restore-button" type="submit">Aktifkan</button>
+                                    </form>
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
+                @endif
+            </div>
+        </dialog>
     </div>
 
     <script>
         function initializePackingDashboard(dashboard) {
             const inModal = dashboard.querySelector('[data-in-modal]');
+            const locationSettingsModal = dashboard.querySelector('[data-location-settings-modal]');
             const inBarcode = dashboard.querySelector('[data-in-barcode]');
             const inScanButton = dashboard.querySelector('[data-in-scan]');
             const inScanLabel = dashboard.querySelector('[data-in-scan-label]');
@@ -547,6 +636,33 @@
                 inModal.showModal();
                 inBarcode.focus();
             });
+            dashboard.querySelector('[data-open-location-settings]')?.addEventListener('click', () => {
+                locationSettingsModal.showModal();
+            });
+
+            dashboard.querySelectorAll('[data-remove-location-form]').forEach(form => {
+                form.addEventListener('submit', async event => {
+                    event.preventDefault();
+
+                    const result = await Swal.fire({
+                        target: locationSettingsModal,
+                        icon: 'warning',
+                        title: `Hapus ${form.dataset.locationName}?`,
+                        text: 'Lokasi akan dinonaktifkan dan disembunyikan. Riwayat packing tetap tersimpan.',
+                        showCancelButton: true,
+                        confirmButtonColor: '#c83d42',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: 'Ya, hapus',
+                        cancelButtonText: 'Batal',
+                        focusCancel: true,
+                    });
+
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+
             inScanButton.addEventListener('click', scanInBarcode);
             inBarcode.addEventListener('keydown', event => {
                 if (event.key === 'Enter') {
@@ -855,12 +971,21 @@
                         location: outLocation.value,
                         no_hu: noHu,
                     });
+                    [...scannedProcesses.keys()].forEach(processId => {
+                        query.append('process_ids[]', String(processId));
+                    });
                     const response = await fetch(`${outForm.dataset.scanUrl}?${query}`, {
                         headers: { Accept: 'application/json' },
                     });
                     const payload = await response.json();
 
                     if (!response.ok) {
+                        if (payload.code === 'fifo_violation') {
+                            await showFifoViolation(payload);
+                            outNoHu.select();
+                            return;
+                        }
+
                         throw new Error(payload.message || 'No HU gagal dipindai.');
                     }
 
@@ -941,6 +1066,12 @@
                     const payload = await response.json();
 
                     if (!response.ok) {
+                        if (payload.code === 'fifo_violation') {
+                            await showFifoViolation(payload);
+                            completeOutButton.disabled = false;
+                            return;
+                        }
+
                         const validationMessage = Object.values(payload.errors || {}).flat()[0];
                         throw new Error(validationMessage || payload.message || 'Packing OUT gagal disimpan.');
                     }
@@ -951,13 +1082,26 @@
                         title: 'Packing OUT berhasil!',
                         text: payload.message,
                         confirmButtonColor: '#1677d2',
-                        confirmButtonText: 'OK',
+                        timer: 1800,
+                        timerProgressBar: true,
+                        showConfirmButton: false,
                     });
                     window.location.reload();
                 } catch (error) {
                     showOutError(error.message);
                     completeOutButton.disabled = false;
                 }
+            }
+
+            async function showFifoViolation(payload) {
+                await Swal.fire({
+                    target: outModal,
+                    icon: 'warning',
+                    title: 'Urutan FIFO dilanggar',
+                    text: payload.message || 'Proses yang lebih lama harus di-OUT terlebih dahulu.',
+                    confirmButtonColor: '#c83d42',
+                    confirmButtonText: 'Mengerti',
+                });
             }
 
             function addScannedProcess(process) {
@@ -1035,13 +1179,35 @@
                 button.addEventListener('click', () => button.closest('dialog').close());
             });
 
-            [inModal, editModal, outModal].forEach(modal => {
+            [inModal, editModal, outModal, locationSettingsModal].forEach(modal => {
                 modal.addEventListener('click', event => {
                     if (event.target === modal) {
                         modal.close();
                     }
                 });
             });
+
+            if (dashboard.dataset.locationSettingsError) {
+                locationSettingsModal.showModal();
+                Swal.fire({
+                    target: locationSettingsModal,
+                    icon: 'error',
+                    title: 'Lokasi tidak dapat dihapus',
+                    text: dashboard.dataset.locationSettingsError,
+                    confirmButtonColor: '#c83d42',
+                    confirmButtonText: 'Mengerti',
+                });
+            }
+
+            if (dashboard.dataset.searchNoResults === 'true') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Material tidak ditemukan',
+                    text: 'Tidak ada data yang cocok di seluruh lokasi aktif. Periksa No HU atau kata kunci.',
+                    confirmButtonColor: '#c83d42',
+                    confirmButtonText: 'Mengerti',
+                });
+            }
         }
 
         let packingNavigationRequest = 0;

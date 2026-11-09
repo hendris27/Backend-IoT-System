@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PackingLocation;
 use App\Models\PackingProcess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -9,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -16,20 +18,20 @@ class PackingProcessController extends Controller
 {
     public function dashboard(Request $request): View
     {
-        $locations = collect(range(1, 7))
-            ->map(fn (int $number): string => "WP-{$number}");
+        $locations = PackingLocation::activeNames();
 
         $validated = $request->validate([
             'location' => ['nullable', 'string', Rule::in($locations->all())],
             'search' => ['nullable', 'string', 'max:100'],
+            'search_submitted' => ['sometimes', 'boolean'],
         ]);
 
-        $selectedLocation = $validated['location'] ?? 'WP-1';
+        $selectedLocation = $validated['location'] ?? $locations->first() ?? 'WP-1';
         $search = $validated['search'] ?? null;
+        $loggedInUserId = $request->user()->getKey();
 
-        $filteredProcesses = fn (): Builder => PackingProcess::query()
-            ->where('location', $selectedLocation)
-            ->when($search, function (Builder $query) use ($search): void {
+        $applySearch = function (Builder $query) use ($search): Builder {
+            return $query->when($search, function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('model', 'like', "%{$search}%")
                         ->orWhere('no_hu', 'like', "%{$search}%")
@@ -37,6 +39,21 @@ class PackingProcessController extends Controller
                         ->orWhere('box_id', 'like', "%{$search}%");
                 });
             });
+        };
+
+        $filteredProcesses = fn (): Builder => $applySearch(
+            PackingProcess::query()->where('location', $selectedLocation),
+        );
+        $matchingLocations = $search
+            ? $applySearch(PackingProcess::query())
+                ->whereIn('location', $locations->all())
+                ->distinct()
+                ->pluck('location')
+                ->all()
+            : [];
+        $searchNotFound = (bool) ($validated['search_submitted'] ?? false)
+            && filled($search)
+            && $matchingLocations === [];
 
         $activeProcesses = $filteredProcesses()
             ->whereNull('time_out')
@@ -45,19 +62,22 @@ class PackingProcessController extends Controller
             ->withQueryString();
 
         $historyProcesses = $filteredProcesses()
+            ->with(['inUser:id,name', 'outUser:id,name'])
+            ->where(function (Builder $query) use ($loggedInUserId): void {
+                $query->where('in_user_id', $loggedInUserId)
+                    ->orWhere('out_user_id', $loggedInUserId);
+            })
             ->latest('id')
             ->paginate(10, ['*'], 'history_page')
             ->withQueryString();
 
         $waitingSummary = PackingProcess::query()
-            ->where('location', $selectedLocation)
             ->whereNull('time_out')
             ->selectRaw('COALESCE(SUM(qty), 0) as qty, COUNT(*) as boxes')
             ->first();
 
         $outSummary = PackingProcess::query()
-            ->where('location', $selectedLocation)
-            ->whereDate('time_out', today())
+            ->whereNotNull('time_out')
             ->selectRaw('COALESCE(SUM(qty), 0) as qty, COUNT(*) as boxes')
             ->first();
 
@@ -72,6 +92,14 @@ class PackingProcessController extends Controller
             ->whereNotNull('no_hu')
             ->where('no_hu', '<>', '')
             ->count();
+
+        $activeLocationCounts = PackingProcess::query()
+            ->whereNull('time_out')
+            ->selectRaw('location, COUNT(*) as active_count')
+            ->groupBy('location')
+            ->pluck('active_count', 'location');
+        $inactiveLocations = PackingLocation::inactiveNames();
+        $nextLocationName = PackingLocation::nextName();
 
         $boxIdPattern = '/^'.preg_quote($selectedLocation, '/').'-([0-9]+)$/';
         $activeBoxNumbers = PackingProcess::query()
@@ -100,9 +128,14 @@ class PackingProcessController extends Controller
             'outAvailableCount',
             'historyProcesses',
             'locations',
+            'matchingLocations',
+            'activeLocationCounts',
+            'inactiveLocations',
+            'nextLocationName',
             'nextBoxNumber',
             'outSummary',
             'search',
+            'searchNotFound',
             'selectedLocation',
             'waitingSummary',
         ));
@@ -111,9 +144,8 @@ class PackingProcessController extends Controller
     public function storeFromDashboard(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'location' => ['required', 'string', Rule::in(collect(range(1, 7))->map(fn (int $number): string => "WP-{$number}")->all())],
+            'location' => ['required', 'string', Rule::in(PackingLocation::activeNames()->all())],
             'customer' => ['required', 'string', 'max:100'],
-            'remarks' => ['nullable', 'string', 'max:5000'],
             'boxes' => ['required', 'array', 'min:1', 'max:50'],
             'boxes.*' => ['required', 'array'],
             'boxes.*.customer' => ['nullable', 'string', 'max:100'],
@@ -126,7 +158,15 @@ class PackingProcessController extends Controller
             'boxes.*.no_hu.unique' => 'No HU sudah terdaftar pada data Packing.',
         ]);
 
-        DB::transaction(function () use ($validated): void {
+        $userId = $request->user()->getKey();
+
+        DB::transaction(function () use ($validated, $userId): void {
+            PackingLocation::query()
+                ->where('name', $validated['location'])
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             $timeIn = now();
 
             foreach ($validated['boxes'] as $box) {
@@ -134,44 +174,68 @@ class PackingProcessController extends Controller
                     ...$box,
                     'customer' => $box['customer'] ?? $validated['customer'],
                     'location' => $validated['location'],
-                    'remarks' => $validated['remarks'] ?? null,
                     'process_status' => 'IN',
                     'time_in' => $timeIn,
+                    'in_user_id' => $userId,
                 ]);
             }
         });
 
         return to_route('packing.index', ['location' => $validated['location']])
-            ->with('success', count($validated['boxes']).' box Packing IN berhasil disimpan.');
+            ->with('success', count($validated['boxes']).' box Packing IN berhasil disimpan.')
+            ->with('packing_success_auto_close', true);
     }
 
     public function markOut(PackingProcess $packingProcess): RedirectResponse
     {
-        $wasMarkedOut = DB::transaction(function () use ($packingProcess): bool {
-            $process = PackingProcess::query()
-                ->whereKey($packingProcess->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
+        $userId = auth()->id();
+
+        $result = DB::transaction(function () use ($packingProcess, $userId): array {
+            $process = PackingProcess::query()->findOrFail($packingProcess->getKey());
 
             if ($process->time_out !== null) {
-                return false;
+                return ['status' => 'already_out'];
             }
 
-            $process->update([
+            $modelKey = $this->normalizeModel($process->model);
+            $activeQueue = $this->activeModelQueue($process->model, lockForUpdate: true);
+            $lockedProcess = $activeQueue->firstWhere('id', $process->getKey());
+
+            if (! $lockedProcess) {
+                return ['status' => 'already_out'];
+            }
+
+            $violation = $this->findFifoViolation(
+                collect([$lockedProcess]),
+                collect([$modelKey => $activeQueue]),
+            );
+
+            if ($violation) {
+                return ['status' => 'fifo_violation', 'process' => $violation];
+            }
+
+            $lockedProcess->update([
                 'process_status' => 'OUT',
                 'time_out' => now(),
+                'out_user_id' => $userId,
             ]);
 
-            return true;
+            return ['status' => 'completed'];
         });
 
-        if (! $wasMarkedOut) {
+        if ($result['status'] === 'fifo_violation') {
+            return to_route('packing.index', ['location' => $packingProcess->location])
+                ->withErrors(['packing_process' => e($this->fifoViolationMessage($result['process']))]);
+        }
+
+        if ($result['status'] === 'already_out') {
             return to_route('packing.index', ['location' => $packingProcess->location])
                 ->withErrors(['packing_process' => 'Packing ini sudah berstatus OUT.']);
         }
 
         return to_route('packing.index', ['location' => $packingProcess->location])
-            ->with('success', 'Packing OUT berhasil disimpan.');
+            ->with('success', 'Packing OUT berhasil disimpan.')
+            ->with('packing_success_auto_close', true);
     }
 
     public function updateFromDashboard(Request $request, PackingProcess $packingProcess): RedirectResponse
@@ -214,15 +278,11 @@ class PackingProcessController extends Controller
             'barcode' => ['required', 'string', 'max:255'],
         ]);
 
-        $segments = explode('@', $validated['barcode']);
+        $barcode = trim($validated['barcode']);
+        $segments = explode('@', $barcode);
+        $noHu = $this->extractNoHuFromBarcode($barcode);
 
-        if (
-            ! str_starts_with($validated['barcode'], '@')
-            || count($segments) < 5
-            || preg_match('/^\d{4}/', $segments[1]) !== 1
-            || strlen($segments[2]) < 15
-            || $segments[3] === ''
-        ) {
+        if ($noHu === null) {
             return response()->json([
                 'message' => 'Format barcode tidak valid.',
             ], 422);
@@ -238,8 +298,6 @@ class PackingProcessController extends Controller
                 'message' => "Customer dengan kode {$customerCode} tidak ditemukan.",
             ], 404);
         }
-
-        $noHu = ltrim(substr($segments[2], -15), '0');
 
         if ($noHu === '') {
             return response()->json([
@@ -264,13 +322,32 @@ class PackingProcessController extends Controller
     public function scanForOut(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'location' => ['required', 'string', Rule::in(collect(range(1, 7))->map(fn (int $number): string => "WP-{$number}")->all())],
-            'no_hu' => ['required', 'string', 'max:100'],
+            'location' => ['required', 'string', Rule::in(PackingLocation::activeNames()->all())],
+            'no_hu' => ['required', 'string', 'max:255'],
+            'process_ids' => ['sometimes', 'array', 'max:50'],
+            'process_ids.*' => ['required', 'integer', 'distinct', 'exists:packing_processes,id'],
         ]);
+
+        $scannedValue = trim($validated['no_hu']);
+        $noHu = str_starts_with($scannedValue, '@')
+            ? $this->extractNoHuFromBarcode($scannedValue)
+            : $scannedValue;
+
+        if ($noHu === null) {
+            return response()->json([
+                'message' => 'Format barcode tidak valid.',
+            ], 422);
+        }
+
+        if ($noHu === '') {
+            return response()->json([
+                'message' => 'No HU pada barcode tidak valid.',
+            ], 422);
+        }
 
         $matches = PackingProcess::query()
             ->where('location', $validated['location'])
-            ->where('no_hu', $validated['no_hu'])
+            ->where('no_hu', $noHu)
             ->whereNull('time_out')
             ->limit(2)
             ->get(['id', 'no_hu', 'model', 'qty', 'box_id']);
@@ -287,53 +364,231 @@ class PackingProcessController extends Controller
             ], 409);
         }
 
-        return response()->json(['process' => $matches->first()]);
+        $process = $matches->first();
+        $pendingIds = array_map('intval', $validated['process_ids'] ?? []);
+
+        if (in_array((int) $process->id, $pendingIds, true)) {
+            return response()->json([
+                'message' => 'No HU ini sudah ada di daftar scan.',
+            ], 409);
+        }
+
+        $pendingProcesses = collect();
+
+        if ($pendingIds !== []) {
+            $pendingProcesses = PackingProcess::query()
+                ->whereIn('id', $pendingIds)
+                ->where('location', $validated['location'])
+                ->whereNull('time_out')
+                ->whereNotNull('no_hu')
+                ->where('no_hu', '<>', '')
+                ->get(['id', 'no_hu', 'model', 'qty', 'box_id', 'location', 'time_in']);
+
+            if ($pendingProcesses->count() !== count($pendingIds)) {
+                return response()->json([
+                    'message' => 'Sebagian No HU yang sudah dipindai berubah atau tidak aktif. Muat ulang halaman dan scan kembali.',
+                ], 409);
+            }
+        }
+
+        $selectedProcesses = $pendingProcesses->push($process);
+        $fifoViolation = $this->findFifoViolation($selectedProcesses);
+
+        if ($fifoViolation) {
+            return $this->fifoViolationResponse($fifoViolation);
+        }
+
+        return response()->json(['process' => $process]);
     }
 
     public function completeOut(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'location' => ['required', 'string', Rule::in(collect(range(1, 7))->map(fn (int $number): string => "WP-{$number}")->all())],
+            'location' => ['required', 'string', Rule::in(PackingLocation::activeNames()->all())],
             'process_ids' => ['required', 'array', 'min:1', 'max:50'],
             'process_ids.*' => ['required', 'integer', 'distinct', 'exists:packing_processes,id'],
         ]);
 
-        $completedCount = DB::transaction(function () use ($validated): ?int {
+        $userId = $request->user()->getKey();
+
+        $result = DB::transaction(function () use ($validated, $userId): array {
+            $processIds = array_map('intval', $validated['process_ids']);
+            $requestedProcesses = PackingProcess::query()
+                ->whereIn('id', $processIds)
+                ->get(['id', 'model']);
+
+            if ($requestedProcesses->count() !== count($processIds)) {
+                return ['status' => 'invalid'];
+            }
+
+            $modelsByKey = $requestedProcesses
+                ->mapWithKeys(fn (PackingProcess $process): array => [
+                    $this->normalizeModel($process->model) => $process->model,
+                ])
+                ->sortKeys();
+            $activeQueues = collect();
+
+            foreach ($modelsByKey as $modelKey => $model) {
+                $activeQueues->put($modelKey, $this->activeModelQueue($model, lockForUpdate: true));
+            }
+
             $processes = PackingProcess::query()
                 ->whereIn('id', $validated['process_ids'])
-                ->where('location', $validated['location'])
-                ->whereNotNull('no_hu')
-                ->where('no_hu', '<>', '')
-                ->whereNull('time_out')
                 ->lockForUpdate()
-                ->get();
+                ->get(['id', 'location', 'no_hu', 'model', 'process_status', 'time_in', 'time_out']);
 
             if ($processes->count() !== count($validated['process_ids'])) {
-                return null;
+                return ['status' => 'invalid'];
+            }
+
+            $eligibleProcesses = $processes->filter(fn (PackingProcess $process): bool => (
+                $process->location === $validated['location']
+                && $process->time_out === null
+                && trim((string) $process->no_hu) !== ''
+            ));
+
+            if ($eligibleProcesses->count() !== count($processIds)) {
+                return ['status' => 'invalid'];
+            }
+
+            foreach ($eligibleProcesses as $process) {
+                $modelKey = $this->normalizeModel($process->model);
+                $activeQueue = $activeQueues->get($modelKey);
+
+                if (! $activeQueue || ! $activeQueue->contains(
+                    fn (PackingProcess $queuedProcess): bool => (int) $queuedProcess->id === (int) $process->id,
+                )) {
+                    return ['status' => 'invalid'];
+                }
+            }
+
+            $fifoViolation = $this->findFifoViolation($eligibleProcesses, $activeQueues);
+
+            if ($fifoViolation) {
+                return ['status' => 'fifo_violation', 'process' => $fifoViolation];
             }
 
             $timeOut = now();
 
-            foreach ($processes as $process) {
+            foreach ($eligibleProcesses as $process) {
                 $process->update([
                     'process_status' => 'OUT',
                     'time_out' => $timeOut,
+                    'out_user_id' => $userId,
                 ]);
             }
 
-            return $processes->count();
+            return ['status' => 'completed', 'count' => $eligibleProcesses->count()];
         });
 
-        if ($completedCount === null) {
+        if ($result['status'] === 'fifo_violation') {
+            return $this->fifoViolationResponse($result['process']);
+        }
+
+        if ($result['status'] === 'invalid') {
             return response()->json([
                 'message' => 'Sebagian packing sudah OUT, tidak memiliki No HU, atau tidak termasuk lokasi ini. Muat ulang halaman dan scan kembali.',
             ], 409);
         }
 
         return response()->json([
-            'message' => "{$completedCount} box berhasil diselesaikan.",
-            'completed' => $completedCount,
+            'message' => "{$result['count']} box berhasil diselesaikan.",
+            'completed' => $result['count'],
         ]);
+    }
+
+    private function activeModelQueue(string $model, bool $lockForUpdate = false): Collection
+    {
+        $query = PackingProcess::query()
+            ->whereRaw('LOWER(model) = ?', [mb_strtolower(trim($model))])
+            ->whereNull('time_out')
+            ->orderBy('time_in')
+            ->orderBy('id');
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        return $query->get(['id', 'location', 'model', 'no_hu', 'box_id', 'time_in', 'time_out']);
+    }
+
+    private function extractNoHuFromBarcode(string $barcode): ?string
+    {
+        $segments = explode('@', trim($barcode));
+
+        if (
+            ! str_starts_with($barcode, '@')
+            || count($segments) < 5
+            || preg_match('/^\d{4}/', $segments[1]) !== 1
+            || strlen($segments[2]) < 15
+            || $segments[3] === ''
+        ) {
+            return null;
+        }
+
+        return ltrim(substr($segments[2], -15), '0');
+    }
+
+    private function findFifoViolation(Collection $selectedProcesses, ?Collection $activeQueues = null): ?PackingProcess
+    {
+        $selectedByModel = $selectedProcesses
+            ->groupBy(fn (PackingProcess $process): string => $this->normalizeModel($process->model))
+            ->sortKeys();
+
+        foreach ($selectedByModel as $modelKey => $selectedForModel) {
+            $activeQueue = $activeQueues?->get($modelKey)
+                ?? $this->activeModelQueue($selectedForModel->first()->model);
+            $selectedIds = $selectedForModel->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+            $expectedIds = $activeQueue->take($selectedForModel->count())
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+            $selectedIdSet = array_fill_keys($selectedIds, true);
+            $expectedIdSet = array_fill_keys($expectedIds, true);
+
+            if (
+                array_diff_key($selectedIdSet, $expectedIdSet) !== []
+                || array_diff_key($expectedIdSet, $selectedIdSet) !== []
+            ) {
+                return $activeQueue->first(
+                    fn (PackingProcess $process): bool => ! isset($selectedIdSet[(int) $process->id]),
+                ) ?? $activeQueue->first();
+            }
+        }
+
+        return null;
+    }
+
+    private function fifoViolationResponse(PackingProcess $requiredProcess): JsonResponse
+    {
+        return response()->json([
+            'code' => 'fifo_violation',
+            'message' => $this->fifoViolationMessage($requiredProcess),
+            'fifo' => [
+                'model' => $requiredProcess->model,
+                'no_hu' => $requiredProcess->no_hu,
+                'location' => $requiredProcess->location,
+                'box_id' => $requiredProcess->box_id,
+                'time_in' => $requiredProcess->time_in?->toIso8601String(),
+            ],
+        ], 409);
+    }
+
+    private function fifoViolationMessage(PackingProcess $requiredProcess): string
+    {
+        $noHu = trim((string) $requiredProcess->no_hu);
+        $requiredItem = $noHu !== ''
+            ? "No HU {$noHu}"
+            : 'record IN tertua (No HU belum diisi)';
+
+        return "Urutan FIFO untuk model {$requiredProcess->model} dilanggar. Proses {$requiredItem} di lokasi {$requiredProcess->location} terlebih dahulu.";
+    }
+
+    private function normalizeModel(string $model): string
+    {
+        return mb_strtolower(trim($model));
     }
 
     public function index(): JsonResponse
@@ -384,7 +639,7 @@ class PackingProcessController extends Controller
             'model' => [$required, 'string', 'max:100'],
             'no_hu' => ['nullable', 'string', 'max:100'],
             'customer' => [$required, 'string', 'max:100'],
-            'location' => [$required, 'string', 'max:100'],
+            'location' => [$required, 'string', Rule::in(PackingLocation::activeNames()->all())],
             'box_id' => [$required, 'string', 'max:100'],
             'qty' => [$required, 'integer', 'min:1'],
             'remarks' => $isUpdate
