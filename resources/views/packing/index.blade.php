@@ -32,11 +32,12 @@
                     </svg>
                 </span>
                 <div class="packing-summary-copy">
-                    <h2>Waiting (QTY)</h2>
+                    <h2>Waiting Packing</h2>
                     <p>{{ $waitingSummary->qty }}</p>
                 </div>
             </article>
-            <article class="packing-summary-card packing-summary-card--waiting">
+            <a class="packing-summary-card packing-summary-card--waiting packing-summary-card--link"
+                href="{{ route('packing.waiting') }}" aria-label="Lihat daftar Waiting Packing">
                 <span class="packing-summary-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
                         <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9Z" />
@@ -44,10 +45,10 @@
                     </svg>
                 </span>
                 <div class="packing-summary-copy">
-                    <h2>Waiting (BOX)</h2>
+                    <h2>Waiting Packing</h2>
                     <p>{{ $waitingSummary->boxes }}</p>
                 </div>
-            </article>
+            </a>
             <article class="packing-summary-card packing-summary-card--out">
                 <span class="packing-summary-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
@@ -99,6 +100,10 @@
                             {{ $location }}
                         </a>
                     @endforeach
+                    <button class="packing-online-button" type="button" data-open-online-modal
+                        aria-label="Buka scan ONLINE untuk menyimpan IN dan OUT">
+                        ONLINE
+                    </button>
                 </nav>
             </aside>
 
@@ -181,7 +186,7 @@
         <section class="packing-history-panel" aria-labelledby="packing-history-title">
             <div class="packing-history-heading">
                 <div>
-                    <h2 id="packing-history-title">History Process {{ $selectedLocation }}</h2>
+                    <h2 id="packing-history-title">History Process {{ $selectedLocation }} &amp; ONLINE</h2>
                 </div>
             </div>
             <div class="packing-table-wrap">
@@ -472,6 +477,64 @@
             </form>
         </dialog>
 
+        <dialog class="packing-modal packing-online-modal" data-online-modal
+            aria-labelledby="packing-online-title">
+            <form class="packing-modal-form packing-online-form" data-online-form
+                data-scan-url="{{ route('packing.processes.scan-online') }}"
+                data-complete-url="{{ route('packing.processes.complete-online') }}">
+                @csrf
+                <div class="packing-modal-heading">
+                    <div>
+                        <p class="packing-eyebrow">Packing</p>
+                        <h2 id="packing-online-title">ONLINE IN + OUT</h2>
+                    </div>
+                    <button class="packing-modal-close" type="button" data-close-modal aria-label="Tutup">×</button>
+                </div>
+
+                <div class="packing-out-scan packing-online-scan">
+                    <label class="sr-only" for="packing-online-no-hu">Scan barcode here........</label>
+                    <input id="packing-online-no-hu" type="text" inputmode="text" autocomplete="off"
+                        placeholder="Scan barcode untuk menyimpan IN dan OUT" data-online-no-hu>
+                    <button class="packing-out-scan-button" type="button" data-online-scan>
+                        <span data-online-scan-label aria-live="polite">SCAN</span>
+                    </button>
+                </div>
+                <p class="packing-out-help"></p>
+                <p class="packing-out-error" data-online-error role="alert" hidden></p>
+
+                <div class="packing-out-list-heading">LIST BARCODE ONLINE</div>
+                <div class="packing-table-wrap packing-out-table-wrap">
+                    <table class="packing-table packing-out-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">No.</th>
+                                <th scope="col">Customer</th>
+                                <th scope="col">Model</th>
+                                <th scope="col">QTY</th>
+                                <th scope="col">No HU</th>
+                                <th scope="col">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody data-online-list>
+                            <tr>
+                                <td class="packing-empty-state" colspan="6">Belum ada barcode dipindai.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="packing-out-total">
+                    <span>TOTAL SCAN</span>
+                    <strong data-online-total>0 ITEM</strong>
+                </div>
+
+                <div class="packing-modal-footer">
+                    <button class="packing-modal-secondary" type="button" data-close-modal>Batal</button>
+                    <button class="packing-action-button packing-action-button--out" type="button"
+                        data-online-complete disabled>COMPLETE</button>
+                </div>
+            </form>
+        </dialog>
+
         <dialog class="packing-modal packing-location-settings-modal" data-location-settings-modal
             aria-labelledby="packing-location-settings-title">
             <div class="packing-modal-form">
@@ -572,7 +635,17 @@
             const outTotal = dashboard.querySelector('[data-out-total]');
             const outError = dashboard.querySelector('[data-out-error]');
             const completeOutButton = dashboard.querySelector('[data-complete-out]');
+            const onlineModal = dashboard.querySelector('[data-online-modal]');
+            const onlineForm = dashboard.querySelector('[data-online-form]');
+            const onlineNoHu = dashboard.querySelector('[data-online-no-hu]');
+            const onlineScanButton = dashboard.querySelector('[data-online-scan]');
+            const onlineScanLabel = dashboard.querySelector('[data-online-scan-label]');
+            const onlineList = dashboard.querySelector('[data-online-list]');
+            const onlineTotal = dashboard.querySelector('[data-online-total]');
+            const onlineCompleteButton = dashboard.querySelector('[data-online-complete]');
+            const onlineError = dashboard.querySelector('[data-online-error]');
             const scannedProcesses = new Map();
+            const onlineScannedItems = new Map();
             const boxList = dashboard.querySelector('[data-box-list]');
             const boxRowTemplate = dashboard.querySelector('[data-box-row-template]');
             const boxTotal = dashboard.querySelector('[data-box-total]');
@@ -638,6 +711,16 @@
             });
             dashboard.querySelector('[data-open-location-settings]')?.addEventListener('click', () => {
                 locationSettingsModal.showModal();
+            });
+            dashboard.querySelectorAll('[data-open-online-modal]').forEach(button => {
+                button.addEventListener('click', () => {
+                    onlineScannedItems.clear();
+                    renderOnlineScans();
+                    onlineNoHu.value = '';
+                    clearOnlineError();
+                    onlineModal.showModal();
+                    onlineNoHu.focus();
+                });
             });
 
             dashboard.querySelectorAll('[data-remove-location-form]').forEach(form => {
@@ -845,6 +928,9 @@
                     targetRow.querySelector('input[name$="[customer]"]').value = payload.customer;
                     targetRow.querySelector('input[name$="[model]"]').value = payload.model;
                     targetRow.querySelector('input[name$="[no_hu]"]').value = payload.no_hu;
+                    if (payload.qty !== null && payload.qty !== undefined) {
+                        targetRow.querySelector('input[name$="[qty]"]').value = payload.qty;
+                    }
                     inBarcode.value = '';
                     inBarcode.focus();
                 } catch (error) {
@@ -948,6 +1034,24 @@
             });
 
             completeOutButton.addEventListener('click', confirmCompleteOut);
+            onlineScanButton.addEventListener('click', scanOnlineOut);
+            onlineCompleteButton.addEventListener('click', confirmCompleteOnline);
+            onlineList.addEventListener('click', event => {
+                const removeButton = event.target.closest('[data-remove-online-scan]');
+
+                if (!removeButton) {
+                    return;
+                }
+
+                onlineScannedItems.delete(removeButton.dataset.removeOnlineScan);
+                renderOnlineScans();
+            });
+            onlineNoHu.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    scanOnlineOut();
+                }
+            });
 
             async function scanNoHu() {
                 if (outScanButton.disabled) {
@@ -1003,6 +1107,174 @@
                 } finally {
                     outScanButton.disabled = false;
                     outScanLabel.textContent = 'SCAN';
+                }
+            }
+
+            async function scanOnlineOut() {
+                if (onlineScanButton.disabled) {
+                    return;
+                }
+
+                const barcode = onlineNoHu.value.trim();
+
+                if (!barcode) {
+                    showOnlineError('Scan barcode terlebih dahulu.');
+                    onlineNoHu.focus();
+                    return;
+                }
+
+                clearOnlineError();
+                onlineScanButton.disabled = true;
+                onlineScanLabel.textContent = 'MEMPROSES...';
+
+                try {
+                    const query = new URLSearchParams({ barcode });
+                    const response = await fetch(`${onlineForm.dataset.scanUrl}?${query}`, {
+                        headers: { Accept: 'application/json' },
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                        throw new Error(validationMessage || payload.message || 'Barcode gagal dipindai.');
+                    }
+
+                    if (onlineScannedItems.has(payload.no_hu)) {
+                        throw new Error('No HU ini sudah ada di daftar scan ONLINE.');
+                    }
+
+                    onlineScannedItems.set(payload.no_hu, payload);
+                    renderOnlineScans();
+                    onlineNoHu.value = '';
+                    onlineNoHu.focus();
+                } catch (error) {
+                    showOnlineError(error.message);
+                    onlineNoHu.select();
+                } finally {
+                    onlineScanButton.disabled = false;
+                    onlineScanLabel.textContent = 'SCAN';
+                }
+            }
+
+            function renderOnlineScans() {
+                onlineList.replaceChildren();
+
+                if (onlineScannedItems.size === 0) {
+                    const row = document.createElement('tr');
+                    const cell = document.createElement('td');
+                    cell.className = 'packing-empty-state';
+                    cell.colSpan = 6;
+                    cell.textContent = 'Belum ada barcode dipindai.';
+                    row.append(cell);
+                    onlineList.append(row);
+                } else {
+                    [...onlineScannedItems.values()].forEach((item, index) => {
+                        const row = document.createElement('tr');
+                        [index + 1, item.customer, item.model, item.qty, item.no_hu].forEach(value => {
+                            const cell = document.createElement('td');
+                            cell.textContent = value;
+                            row.append(cell);
+                        });
+
+                        const actionCell = document.createElement('td');
+                        const removeButton = document.createElement('button');
+                        removeButton.className = 'packing-out-remove-button';
+                        removeButton.type = 'button';
+                        removeButton.dataset.removeOnlineScan = item.no_hu;
+                        removeButton.setAttribute('aria-label', `Hapus ${item.no_hu}`);
+                        removeButton.textContent = '×';
+                        actionCell.append(removeButton);
+                        row.append(actionCell);
+                        onlineList.append(row);
+                    });
+                }
+
+                onlineTotal.textContent = `${onlineScannedItems.size} ITEM`;
+                onlineCompleteButton.disabled = onlineScannedItems.size === 0;
+            }
+
+            async function confirmCompleteOnline() {
+                if (onlineNoHu.value.trim()) {
+                    showOnlineError('Barcode belum diproses. Tekan Enter atau tombol SCAN terlebih dahulu.');
+                    onlineNoHu.focus();
+                    return;
+                }
+
+                if (onlineScannedItems.size === 0) {
+                    showOnlineError('Scan minimal satu barcode sebelum Complete.');
+                    onlineNoHu.focus();
+                    return;
+                }
+
+                clearOnlineError();
+                const result = await Swal.fire({
+                    target: onlineModal,
+                    icon: 'question',
+                    title: 'Simpan transaksi ONLINE?',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d6a400',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: 'Ya, Complete',
+                    cancelButtonText: 'Batal',
+                    focusCancel: true,
+                });
+
+                if (result.isConfirmed) {
+                    await completeOnline();
+                }
+            }
+
+            async function completeOnline() {
+                if (onlineScannedItems.size === 0 || onlineNoHu.value.trim()) {
+                    showOnlineError(
+                        onlineNoHu.value.trim()
+                            ? 'Barcode belum diproses. Tekan Enter atau tombol SCAN terlebih dahulu.'
+                            : 'Scan minimal satu barcode sebelum Complete.',
+                    );
+                    return;
+                }
+
+                onlineCompleteButton.disabled = true;
+
+                try {
+                    const response = await fetch(onlineForm.dataset.completeUrl, {
+                        method: 'POST',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': onlineForm.querySelector('input[name="_token"]').value,
+                        },
+                        body: JSON.stringify({
+                            barcodes: [...onlineScannedItems.values()].map(item => item.barcode),
+                        }),
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        if (payload.code === 'fifo_violation') {
+                            await showFifoViolation(payload, onlineModal);
+                            return;
+                        }
+
+                        const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                        throw new Error(validationMessage || payload.message || 'Packing ONLINE gagal disimpan.');
+                    }
+
+                    await Swal.fire({
+                        target: onlineModal,
+                        icon: 'success',
+                        title: 'Packing ONLINE berhasil!',
+                        text: payload.message,
+                        confirmButtonColor: '#d6a400',
+                        timer: 1800,
+                        timerProgressBar: true,
+                        showConfirmButton: false,
+                    });
+                    window.location.reload();
+                } catch (error) {
+                    showOnlineError(error.message);
+                } finally {
+                    onlineCompleteButton.disabled = onlineScannedItems.size === 0;
                 }
             }
 
@@ -1093,9 +1365,9 @@
                 }
             }
 
-            async function showFifoViolation(payload) {
+            async function showFifoViolation(payload, target = outModal) {
                 await Swal.fire({
-                    target: outModal,
+                    target,
                     icon: 'warning',
                     title: 'Urutan FIFO dilanggar',
                     text: payload.message || 'Proses yang lebih lama harus di-OUT terlebih dahulu.',
@@ -1157,6 +1429,16 @@
                 outError.textContent = '';
                 outError.hidden = true;
             }
+
+            function showOnlineError(message) {
+                onlineError.textContent = message;
+                onlineError.hidden = false;
+            }
+
+            function clearOnlineError() {
+                onlineError.textContent = '';
+                onlineError.hidden = true;
+            }
             if (dashboard.dataset.reopenIn === 'true') {
                 inModal.showModal();
                 inBarcode.focus();
@@ -1179,7 +1461,7 @@
                 button.addEventListener('click', () => button.closest('dialog').close());
             });
 
-            [inModal, editModal, outModal, locationSettingsModal].forEach(modal => {
+            [inModal, editModal, outModal, onlineModal, locationSettingsModal].forEach(modal => {
                 modal.addEventListener('click', event => {
                     if (event.target === modal) {
                         modal.close();

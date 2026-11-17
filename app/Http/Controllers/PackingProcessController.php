@@ -61,7 +61,12 @@ class PackingProcessController extends Controller
             ->paginate(5, ['*'], 'active_page')
             ->withQueryString();
 
-        $historyProcesses = $filteredProcesses()
+        $historyProcesses = $applySearch(
+            PackingProcess::query()->where(function (Builder $query) use ($selectedLocation): void {
+                $query->where('location', $selectedLocation)
+                    ->orWhere('location', 'ONLINE');
+            }),
+        )
             ->with(['inUser:id,name', 'outUser:id,name'])
             ->where(function (Builder $query) use ($loggedInUserId): void {
                 $query->where('in_user_id', $loggedInUserId)
@@ -139,6 +144,52 @@ class PackingProcessController extends Controller
             'selectedLocation',
             'waitingSummary',
         ));
+    }
+
+    public function waiting(): View
+    {
+        $waitingProcesses = PackingProcess::query()
+            ->with('inUser:id,name')
+            ->whereNotNull('time_in')
+            ->whereNull('time_out')
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return view('packing.waiting', compact('waitingProcesses'));
+    }
+
+    public function updateRemarks(Request $request, PackingProcess $packingProcess): RedirectResponse
+    {
+        $validated = $request->validate([
+            'remarks' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $wasUpdated = DB::transaction(function () use ($packingProcess, $validated): bool {
+            $process = PackingProcess::query()
+                ->whereKey($packingProcess->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($process->time_in === null || $process->time_out !== null) {
+                return false;
+            }
+
+            $process->update([
+                'remarks' => $validated['remarks'] ?? null,
+            ]);
+
+            return true;
+        });
+
+        if (! $wasUpdated) {
+            return to_route('packing.waiting')
+                ->withErrors(['remarks' => 'Remarks hanya bisa diubah saat packing masih menunggu OUT.']);
+        }
+
+        return to_route('packing.waiting')
+            ->with('success', 'Remarks berhasil diperbarui.')
+            ->with('packing_success_auto_close', true);
     }
 
     public function storeFromDashboard(Request $request): RedirectResponse
@@ -281,6 +332,10 @@ class PackingProcessController extends Controller
         $barcode = trim($validated['barcode']);
         $segments = explode('@', $barcode);
         $noHu = $this->extractNoHuFromBarcode($barcode);
+        $qtySegment = $segments[count($segments) - 3] ?? null;
+        $qty = is_string($qtySegment) && ctype_digit($qtySegment) && (int) $qtySegment > 0
+            ? (int) $qtySegment
+            : null;
 
         if ($noHu === null) {
             return response()->json([
@@ -316,7 +371,104 @@ class PackingProcessController extends Controller
             'customer' => $customerName,
             'model' => $segments[3],
             'no_hu' => $noHu,
+            'qty' => $qty,
         ]);
+    }
+
+    public function scanOnline(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'barcode' => ['required', 'string', 'max:255'],
+        ]);
+
+        $item = $this->onlineBarcodeData(trim($validated['barcode']));
+
+        if (PackingProcess::query()->where('no_hu', $item['no_hu'])->exists()) {
+            return response()->json([
+                'message' => "No HU {$item['no_hu']} sudah pernah terdaftar pada data Packing.",
+            ], 409);
+        }
+
+        return response()->json($item);
+    }
+
+    public function completeOnline(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'barcodes' => ['required', 'array', 'min:1', 'max:50'],
+            'barcodes.*' => ['required', 'string', 'max:255'],
+        ]);
+
+        $items = collect($validated['barcodes'])
+            ->map(fn (string $barcode): array => $this->onlineBarcodeData(trim($barcode)));
+        $noHuList = $items->pluck('no_hu');
+
+        if ($noHuList->unique()->count() !== $noHuList->count()) {
+            return response()->json([
+                'message' => 'Daftar scan berisi No HU yang sama lebih dari satu kali.',
+            ], 409);
+        }
+
+        $userId = $request->user()->getKey();
+        $result = DB::transaction(function () use ($items, $noHuList, $userId): array {
+            $existingNoHu = PackingProcess::query()
+                ->whereIn('no_hu', $noHuList->all())
+                ->lockForUpdate()
+                ->value('no_hu');
+
+            if ($existingNoHu !== null) {
+                return ['status' => 'duplicate', 'no_hu' => $existingNoHu];
+            }
+
+            $modelsByKey = $items
+                ->mapWithKeys(fn (array $item): array => [
+                    $this->normalizeModel($item['model']) => $item['model'],
+                ])
+                ->sortKeys();
+
+            foreach ($modelsByKey as $model) {
+                $activeQueue = $this->activeModelQueue($model, lockForUpdate: true);
+
+                if ($blockingProcess = $activeQueue->first()) {
+                    return ['status' => 'fifo_violation', 'process' => $blockingProcess];
+                }
+            }
+
+            $timestamp = now();
+
+            foreach ($items as $item) {
+                PackingProcess::query()->create([
+                    'customer' => $item['customer'],
+                    'model' => $item['model'],
+                    'no_hu' => $item['no_hu'],
+                    'location' => 'ONLINE',
+                    'box_id' => "ONLINE-{$item['no_hu']}",
+                    'qty' => $item['qty'],
+                    'process_status' => 'OUT',
+                    'time_in' => $timestamp,
+                    'in_user_id' => $userId,
+                    'time_out' => $timestamp,
+                    'out_user_id' => $userId,
+                ]);
+            }
+
+            return ['status' => 'created', 'count' => $items->count()];
+        });
+
+        if ($result['status'] === 'fifo_violation') {
+            return $this->fifoViolationResponse($result['process']);
+        }
+
+        if ($result['status'] === 'duplicate') {
+            return response()->json([
+                'message' => "No HU {$result['no_hu']} sudah terdaftar. Muat ulang daftar scan sebelum Complete.",
+            ], 409);
+        }
+
+        return response()->json([
+            'message' => "{$result['count']} box ONLINE berhasil disimpan dengan data IN dan OUT.",
+            'completed' => $result['count'],
+        ], 201);
     }
 
     public function scanForOut(Request $request): JsonResponse
@@ -527,6 +679,47 @@ class PackingProcessController extends Controller
         }
 
         return ltrim(substr($segments[2], -15), '0');
+    }
+
+    private function onlineBarcodeData(string $barcode): array
+    {
+        $segments = explode('@', $barcode);
+        $noHu = $this->extractNoHuFromBarcode($barcode);
+        $qtySegment = $segments[count($segments) - 3] ?? null;
+        $qty = is_string($qtySegment) && ctype_digit($qtySegment) && (int) $qtySegment > 0
+            ? (int) $qtySegment
+            : null;
+
+        if ($noHu === null || $noHu === '' || count($segments) < 7) {
+            abort(422, 'Format barcode atau No HU tidak valid.');
+        }
+
+        if ($qty === null) {
+            abort(422, 'QTY pada bagian akhir barcode tidak valid.');
+        }
+
+        $customerCode = substr($segments[1], 0, 4);
+        $customerName = DB::table('customers')
+            ->where('customer_code', $customerCode)
+            ->value('customer_name');
+
+        if ($customerName === null) {
+            abort(404, "Customer dengan kode {$customerCode} tidak ditemukan.");
+        }
+
+        $model = trim($segments[3]);
+
+        if ($model === '' || mb_strlen($model) > 100) {
+            abort(422, 'Model pada barcode tidak valid.');
+        }
+
+        return [
+            'customer' => $customerName,
+            'model' => $model,
+            'no_hu' => $noHu,
+            'qty' => $qty,
+            'barcode' => $barcode,
+        ];
     }
 
     private function findFifoViolation(Collection $selectedProcesses, ?Collection $activeQueues = null): ?PackingProcess

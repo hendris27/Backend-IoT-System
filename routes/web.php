@@ -75,15 +75,22 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
 Route::get('/employees', [EmployeeController::class, 'index'])->name('employees.index');
 Route::prefix('packing')->name('packing.')->group(function () {
     Route::get('/', [PackingProcessController::class, 'dashboard'])->name('index');
+    Route::get('/waiting', [PackingProcessController::class, 'waiting'])->name('waiting');
     Route::post('/locations', [PackingLocationController::class, 'store'])->name('locations.store');
     Route::delete('/locations/{location}', [PackingLocationController::class, 'destroy'])->name('locations.destroy');
     Route::post('/locations/{location}/activate', [PackingLocationController::class, 'activate'])->name('locations.activate');
     Route::post('/processes', [PackingProcessController::class, 'storeFromDashboard'])->name('processes.store');
+    Route::get('/processes/scan-online', [PackingProcessController::class, 'scanOnline'])->name('processes.scan-online');
+    Route::post('/processes/complete-online', [PackingProcessController::class, 'completeOnline'])
+        ->name('processes.complete-online');
     Route::get('/processes/scan-in', [PackingProcessController::class, 'scanForIn'])->name('processes.scan-in');
     Route::get('/processes/scan', [PackingProcessController::class, 'scanForOut'])->name('processes.scan');
     Route::post('/processes/complete-out', [PackingProcessController::class, 'completeOut'])->name('processes.complete-out');
     Route::patch('/processes/{packingProcess}', [PackingProcessController::class, 'updateFromDashboard'])
         ->name('processes.update');
+    Route::patch('/processes/{packingProcess}/remarks', [PackingProcessController::class, 'updateRemarks'])
+        ->whereNumber('packingProcess')
+        ->name('processes.remarks.update');
     Route::post('/processes/{packingProcess}/out', [PackingProcessController::class, 'markOut'])
         ->name('processes.out');
     Route::get('/history/export', [PackingHistoryController::class, 'export'])->name('history.export');

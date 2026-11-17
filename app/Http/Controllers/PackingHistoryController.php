@@ -20,9 +20,14 @@ class PackingHistoryController extends Controller
         $users = $this->historyUsersQuery($filters)
             ->paginate(10)
             ->withQueryString();
+        $onlineProcesses = $this->historyDetailsQuery($filters)
+            ->where('processes.location', 'ONLINE')
+            ->paginate(10, ['*'], 'online_page')
+            ->withQueryString();
 
         return view('packing.history', compact(
             'filters',
+            'onlineProcesses',
             'users',
         ));
     }
