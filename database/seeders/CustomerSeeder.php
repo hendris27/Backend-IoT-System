@@ -17,6 +17,7 @@ class CustomerSeeder extends Seeder
             ['customer_code' => '1123', 'curr' => null, 'customer_name' => 'IC', 'country_key' => 'ICHIKOH'],
             ['customer_code' => '1153', 'curr' => null, 'customer_name' => 'KT', 'country_key' => 'Koito Manufacturing'],
             ['customer_code' => '1187', 'curr' => null, 'customer_name' => 'MT', 'country_key' => 'Mitsuba'],
+            ['customer_code' => '1347', 'curr' => null, 'customer_name' => 'TRI', 'country_key' => 'Tokkai Rika'],
             ['customer_code' => '1359', 'curr' => null, 'customer_name' => 'TD', 'country_key' => 'Toyodenso'],
             ['customer_code' => '1019', 'curr' => null, 'customer_name' => 'AV', 'country_key' => 'AVI Automotive'],
             ['customer_code' => '1112', 'curr' => null, 'customer_name' => 'MS', 'country_key' => 'MAS-I Corporation'],
