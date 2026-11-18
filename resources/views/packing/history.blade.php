@@ -94,5 +94,58 @@
                 <div class="packing-history-pagination">{{ $users->onEachSide(1)->links() }}</div>
             @endif
         </section>
+
+        <section class="packing-history-card">
+            <div class="packing-history-table-heading">
+                <div>
+                    <h3>Riwayat ONLINE</h3>
+                    <p>Transaksi ONLINE dengan data IN dan OUT dalam satu scan.</p>
+                </div>
+            </div>
+            <div class="packing-history-table-wrap">
+                <table class="packing-history-table packing-history-detail-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">No</th>
+                            <th scope="col">Customer</th>
+                            <th scope="col">Model</th>
+                            <th scope="col">No HU</th>
+                            <th scope="col">Qty (Box)</th>
+                            <th scope="col">Time IN</th>
+                            <th scope="col">PIC IN</th>
+                            <th scope="col">Time OUT</th>
+                            <th scope="col">PIC OUT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($onlineProcesses as $process)
+                            <tr>
+                                <td>{{ $onlineProcesses->firstItem() + $loop->index }}</td>
+                                <td>{{ $process->customer ?: '—' }}</td>
+                                <td>{{ $process->model ?: '—' }}</td>
+                                <td>{{ $process->no_hu ?: '—' }}</td>
+                                <td>{{ number_format($process->qty) }}</td>
+                                <td>{{ $process->time_in ? \Illuminate\Support\Carbon::parse($process->time_in)->timezone('Asia/Bangkok')->format('d M Y, H:i') : '—' }}</td>
+                                <td>{{ $process->in_pic ?: '—' }}</td>
+                                <td>{{ $process->time_out ? \Illuminate\Support\Carbon::parse($process->time_out)->timezone('Asia/Bangkok')->format('d M Y, H:i') : '—' }}</td>
+                                <td>{{ $process->out_pic ?: '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td class="packing-history-empty" colspan="9">
+                                    Belum ada riwayat ONLINE pada filter ini.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            @if ($onlineProcesses->hasPages())
+                <div class="packing-history-pagination">
+                    {{ $onlineProcesses->onEachSide(1)->links() }}
+                </div>
+            @endif
+        </section>
     </section>
 </x-sidebar>
