@@ -332,10 +332,7 @@ class PackingProcessController extends Controller
         $barcode = trim($validated['barcode']);
         $segments = explode('@', $barcode);
         $noHu = $this->extractNoHuFromBarcode($barcode);
-        $qtySegment = $segments[count($segments) - 3] ?? null;
-        $qty = is_string($qtySegment) && ctype_digit($qtySegment) && (int) $qtySegment > 0
-            ? (int) $qtySegment
-            : null;
+        $qty = $this->extractQtyFromBarcodeSegments($segments);
 
         if ($noHu === null) {
             return response()->json([
@@ -685,10 +682,7 @@ class PackingProcessController extends Controller
     {
         $segments = explode('@', $barcode);
         $noHu = $this->extractNoHuFromBarcode($barcode);
-        $qtySegment = $segments[count($segments) - 3] ?? null;
-        $qty = is_string($qtySegment) && ctype_digit($qtySegment) && (int) $qtySegment > 0
-            ? (int) $qtySegment
-            : null;
+        $qty = $this->extractQtyFromBarcodeSegments($segments);
 
         if ($noHu === null || $noHu === '' || count($segments) < 7) {
             abort(422, 'Format barcode atau No HU tidak valid.');
@@ -720,6 +714,22 @@ class PackingProcessController extends Controller
             'qty' => $qty,
             'barcode' => $barcode,
         ];
+    }
+
+    private function extractQtyFromBarcodeSegments(array $segments): ?int
+    {
+        $qtySegment = $segments[count($segments) - 3] ?? null;
+
+        if (
+            ! is_string($qtySegment)
+            || preg_match('/^(?:\d+|\d{1,3}(?:,\d{3})+)$/', $qtySegment) !== 1
+        ) {
+            return null;
+        }
+
+        $qty = (int) str_replace(',', '', $qtySegment);
+
+        return $qty > 0 ? $qty : null;
     }
 
     private function findFifoViolation(Collection $selectedProcesses, ?Collection $activeQueues = null): ?PackingProcess

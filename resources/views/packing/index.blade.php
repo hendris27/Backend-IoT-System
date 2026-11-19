@@ -268,6 +268,10 @@
                         <span>BOX saat ini</span>
                         <strong data-box-current>1</strong>
                     </div>
+                    <div class="packing-in-overview-item">
+                        <span>Total Scan</span>
+                        <strong data-in-total-scan>0</strong>
+                    </div>
                 </div>
 
                 <div class="packing-out-scan">
@@ -650,6 +654,7 @@
             const boxRowTemplate = dashboard.querySelector('[data-box-row-template]');
             const boxTotal = dashboard.querySelector('[data-box-total]');
             const boxCurrent = dashboard.querySelector('[data-box-current]');
+            const inTotalScan = dashboard.querySelector('[data-in-total-scan]');
             const maxBoxes = 50;
             const boxIdPrefix = `${dashboard.dataset.location}-`;
             const activeBoxNumbers = new Set(JSON.parse(dashboard.dataset.activeBoxNumbers || '[]'));
@@ -787,6 +792,10 @@
             });
 
             boxList.addEventListener('input', event => {
+                if (event.target.matches('[data-box-field="no_hu"]')) {
+                    updateBoxRows();
+                }
+
                 const copyQtyCheckbox = boxList.querySelector('[data-copy-qty]');
 
                 if (
@@ -931,6 +940,7 @@
                     if (payload.qty !== null && payload.qty !== undefined) {
                         targetRow.querySelector('input[name$="[qty]"]').value = payload.qty;
                     }
+                    updateBoxRows();
                     inBarcode.value = '';
                     inBarcode.focus();
                 } catch (error) {
@@ -974,6 +984,9 @@
                 });
 
                 boxTotal.textContent = rows.length;
+                inTotalScan.textContent = rows.filter(row => (
+                    row.querySelector('input[name$="[no_hu]"]').value.trim() !== ''
+                )).length;
                 boxCurrent.textContent = Math.min(Number(boxCurrent.textContent), rows.length);
             }
 
